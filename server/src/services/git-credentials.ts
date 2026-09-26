@@ -487,11 +487,16 @@ export async function resolveManagedGitHubCredential(
       )).limit(1);
       if (!membership || membership.role === "viewer") return { configured: true, identitySource: selection.identitySource, error: "The managed GitHub identity owner is not an authorized company member" };
     }
+    const [connection] = await db.select({ config: toolConnections.config }).from(toolConnections).where(and(
+      eq(toolConnections.companyId, companyId),
+      eq(toolConnections.id, grant.connectionId),
+    )).limit(1);
+    const isPat = connection?.config?.connectionMethodKey === "mcp-key";
     const expiresAt = grant.providerTenant?.oauth?.accessTokenExpiresAt;
     const refreshedAt = grant.providerTenant?.oauth?.refreshedAt;
     const expiryMs = typeof expiresAt === "string" ? Date.parse(expiresAt) : Number.NaN;
     const refreshedMs = typeof refreshedAt === "string" ? Date.parse(refreshedAt) : Number.NaN;
-    if (Number.isFinite(expiryMs) && (
+    if (!isPat && Number.isFinite(expiryMs) && (
       expiryMs <= Date.now() + 60 * 60_000
       || !Number.isFinite(refreshedMs)
       || refreshedMs <= Date.now() - 30 * 24 * 60 * 60_000
@@ -505,10 +510,11 @@ export async function resolveManagedGitHubCredential(
         heartbeatRunId: context.heartbeatRunId,
       });
     }
-    const accessRef = grant.credentialSecretRefs.find((ref) => ref.configPath === "oauth.access_token");
-    const github = grant.providerTenant?.github;
-    if (!accessRef || !github) return { configured: true, identitySource: selection.identitySource, error: "The managed GitHub identity is incomplete" };
-    if (github.installationCount < 1 || github.repositoryCount < 1) {
+    const accessRef = grant.credentialSecretRefs.find((ref) => ref.configPath === (isPat ? "credentials.authorization" : "oauth.access_token"));
+    // A PAT authenticates operations but does not establish a verified commit identity.
+    const github = isPat ? undefined : grant.providerTenant?.github;
+    if (!accessRef || (!isPat && !github)) return { configured: true, identitySource: selection.identitySource, error: "The managed GitHub identity is incomplete" };
+    if (github && (github.installationCount < 1 || github.repositoryCount < 1)) {
       return { configured: true, identitySource: selection.identitySource, error: "The managed GitHub identity no longer has repository access" };
     }
     const accessContext = {
@@ -544,13 +550,14 @@ export async function resolveManagedGitHubCredential(
     } else {
       token = await secrets.resolveSecretValue(companyId, accessRef.secretId, accessRef.versionSelector ?? "latest", { accessContext });
     }
+    if (isPat && !token.trim()) return { configured: true, identitySource: selection.identitySource, error: "The managed GitHub credential is missing" };
     return {
       configured: true, identitySource: selection.identitySource,
       credential: {
         token,
         source: "managed_connection" as const,
         secretName: null,
-        githubIdentity: { userId: github.userId, login: github.login },
+        ...(github ? { githubIdentity: { userId: github.userId, login: github.login } } : {}),
         identitySource: grant.kind === "agent" ? "dedicated" as const : "personal" as const,
         connectionId: grant.connectionId,
         grantId: grant.id,

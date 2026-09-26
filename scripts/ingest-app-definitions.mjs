@@ -291,10 +291,14 @@ const apps = [
         "api_key",
         { serverUrl: "https://api.githubcopilot.com/mcp/" },
         "S3",
-        "Create a fine-grained token limited to the repositories agents should use.",
+        "Create a fine-grained token limited to the repositories and permissions agents should use. In standard-trust runs, this token also authenticates shell Git and gh operations. Configure commit author and committer identity separately in Git.",
         {
           label: "Personal access token (advanced)",
           purpose: "tool",
+          whenToUse: "Use a personal access token for MCP tools, shell Git, and gh.",
+          warnings: [
+            "Shell Git and gh receive this token for each operation in standard-trust runs and are not constrained by per-tool Ask-first controls. Limit access in the token's GitHub permissions.",
+          ],
           credentialFields: [
             field("authorization", "GitHub token", "github_pat_..."),
           ],

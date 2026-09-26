@@ -36,6 +36,7 @@ import {
 } from "../services/run-identity.js";
 import { resolveGitHubOperationCredentials } from "../services/github-operation-credentials.js";
 import {
+  createGitRemoteAuthProvider,
   filterResolvedGitHubConnectionsForRun,
   resolveManagedGitHubIdentitySelection,
 } from "../services/git-credentials.js";
@@ -117,6 +118,7 @@ const support = await getEmbeddedPostgresTestSupport();
       input: Awaited<ReturnType<typeof seed>>,
       user: string,
       dedicated = false,
+      method = "managed",
     ) {
       const applicationId = randomUUID(),
         connectionId = randomUUID(),
@@ -139,7 +141,7 @@ const support = await getEmbeddedPostgresTestSupport();
         status: "active",
         enabled: true,
         credentialPolicy: dedicated ? "per_agent" : "per_user",
-        config: { sourceTemplateKey: "github" },
+        config: { sourceTemplateKey: "github", connectionMethodKey: method },
       });
       await db.insert(toolConnectionInstalls).values({
         companyId: input.companyId,
@@ -174,11 +176,11 @@ const support = await getEmbeddedPostgresTestSupport();
         credentialSecretRefs: [
           {
             secretId,
-            configPath: "oauth.access_token",
+            configPath: method === "mcp-key" ? "credentials.authorization" : "oauth.access_token",
             versionSelector: "latest",
           },
         ],
-        providerTenant: {
+        providerTenant: method === "mcp-key" ? null : {
           github: {
             userId: user,
             login: user,
@@ -210,6 +212,64 @@ const support = await getEmbeddedPostgresTestSupport();
       });
       await acceptSteeredIdentity(db, context!);
     }
+    it("resolves a PAT without provider identity and rechecks revocation and responsible user on the same run", async () => {
+      const input = await seed();
+      const pat = await grant(input, "A", false, "mcp-key");
+      const result = await resolveGitHubOperationCredentials(db, input);
+      expect(result).toMatchObject({
+        status: "available", source: "personal", authenticationMode: "managed",
+        connectionId: pat.connectionId, grantId: pat.id,
+        env: { GH_TOKEN: "test-token-A", GITHUB_TOKEN: "test-token-A", PAPERCLIP_GIT_TOKEN: "test-token-A" },
+      });
+      expect(result.login).toBeUndefined();
+      for (const key of ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"]) {
+        expect(result.env[key]).toBeUndefined();
+      }
+      expect(vault.resolveUserSecretValue).toHaveBeenLastCalledWith(input.companyId, {
+        definitionId: pat.definitionId, responsibleUserId: "A", version: "latest", required: true,
+      }, expect.objectContaining({ consumerId: "workspace-git-credential", heartbeatRunId: input.runId }));
+      const availableHistory = await db.select().from(runIdentityContexts).where(eq(runIdentityContexts.runId, input.runId));
+      expect(JSON.stringify(availableHistory)).not.toContain("test-token-");
+      await db.update(connectionGrants).set({ status: "revoked" }).where(eq(connectionGrants.id, pat.id));
+      expect(await resolveGitHubOperationCredentials(db, input)).toMatchObject({ status: "unavailable", env: {} });
+      await db.update(connectionGrants).set({ status: "active" }).where(eq(connectionGrants.id, pat.id));
+      await switchTo(input, "B");
+      expect(await resolveGitHubOperationCredentials(db, input)).toMatchObject({ status: "unavailable", env: {} });
+      const history = await db.select().from(runIdentityContexts).where(eq(runIdentityContexts.runId, input.runId));
+      expect(JSON.stringify(history)).not.toContain("test-token-");
+      const { env: _env, ...summary } = result;
+      expect(JSON.stringify(summary)).not.toContain("test-token-");
+    });
+    it.each([false, true])("isolates agent-target PAT installs (dedicated=%s)", async (dedicated) => {
+      const input = await seed();
+      const pat = await grant(input, "A", dedicated, "mcp-key");
+      expect(await resolveGitHubOperationCredentials(db, input)).toMatchObject({
+        status: "available", source: dedicated ? "dedicated" : "personal",
+        env: { GH_TOKEN: dedicated ? "test-dedicated-token" : "test-token-A" },
+      });
+      await db.update(toolConnectionInstalls).set({ targetId: randomUUID() }).where(eq(toolConnectionInstalls.connectionId, pat.connectionId));
+      expect(await resolveGitHubOperationCredentials(db, input)).toMatchObject({ status: "absent", env: {} });
+    });
+    it.each(["missing", "ambiguous", "unauthorized", "revoked"])("fails closed for a %s PAT grant", async (failure) => {
+      const input = await seed();
+      const pat = await grant(input, "A", false, "mcp-key");
+      if (failure === "missing") {
+        await db.update(connectionGrants).set({ credentialSecretRefs: [] }).where(eq(connectionGrants.id, pat.id));
+      } else if (failure === "ambiguous") {
+        await grant(input, "A", false, "mcp-key");
+      } else if (failure === "unauthorized") {
+        await db.update(companyMemberships).set({ status: "inactive" }).where(eq(companyMemberships.companyId, input.companyId));
+      } else {
+        await db.update(connectionGrants).set({ status: "revoked" }).where(eq(connectionGrants.id, pat.id));
+      }
+      expect(await resolveGitHubOperationCredentials(db, input)).toMatchObject({ status: "unavailable", env: {} });
+      const getByName = vi.fn(async () => ({ id: "legacy-secret" }));
+      const provider = createGitRemoteAuthProvider(db, input.companyId, {
+        agentId: input.agentId, responsibleUserId: "A",
+      }, { secrets: { ...vault, getByName }, env: { GITHUB_TOKEN: "test-host-token" } });
+      await expect(provider("https://github.com/example/repo.git")).rejects.toThrow();
+      expect(getByName).not.toHaveBeenCalled();
+    });
     it("resolves A → B → A without retaining tokens, and records only redacted diagnostics", async () => {
       const input = await seed();
       await grant(input, "A");
