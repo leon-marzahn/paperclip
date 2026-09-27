@@ -10,7 +10,7 @@ All commands below assume you are in the **project root** (the directory contain
 docker build -t paperclip-local .
 ```
 
-The Dockerfile installs common agent tools (`git`, `gh`, `curl`, `wget`, `ripgrep`, `python3`) and the Claude, Codex, and OpenCode CLIs.
+The Dockerfile installs common agent tools (`git`, `gh`, `curl`, `wget`, `ripgrep`, `python3`) and the Claude, Codex, OpenCode, and Coolify (`coolify`) CLIs.
 
 Build arguments:
 
@@ -19,6 +19,7 @@ Build arguments:
 | `USER_UID` | `1000` | UID for the container `node` user (match your host UID to avoid permission issues on bind mounts) |
 | `USER_GID` | `1000` | GID for the container `node` group |
 | `CLI_TOOLS_CACHE_EPOCH` | empty | Refresh the CLI-install layer; CI supplies the current ISO week |
+| `COOLIFY_CLI_VERSION` | `1.8.0` | Coolify CLI release; changing it also requires matching `COOLIFY_CLI_SHA256_AMD64` and `COOLIFY_CLI_SHA256_ARM64` build arguments |
 | `PAPERCLIP_BUILD_VERSION` | empty | Runtime version when Git metadata is unavailable |
 | `PAPERCLIP_BUILD_COMMIT` | empty | Source commit written into the server build stamp and runtime environment |
 
@@ -121,6 +122,32 @@ BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
 ```
 
 PostgreSQL data persists in a named Docker volume (`pgdata`). Paperclip data persists in `paperclip-data`.
+
+### Coolify CLI
+
+The full-stack Compose file passes the optional `COOLIFY_TOKEN` environment
+variable to the server. Set it in your shell or an uncommitted Compose `.env`
+file before creating the container. The token is only supplied at runtime.
+
+The [Coolify CLI](https://coolify.io/docs/cli/authentication) uses saved contexts
+or an explicit `--token` flag; it does not read `COOLIFY_TOKEN` automatically.
+For Coolify Cloud, run:
+
+```sh
+docker compose -f docker/docker-compose.yml exec --user node server \
+  sh -c 'coolify --token "$COOLIFY_TOKEN" resource list'
+```
+
+For self-hosted Coolify, add a context once with your instance URL:
+
+```sh
+docker compose -f docker/docker-compose.yml exec --user node server \
+  sh -c 'coolify context add paperclip https://coolify.example.com "$COOLIFY_TOKEN" --default'
+```
+
+This saves the URL and token under `/paperclip/.config/coolify/config.json` in
+the persistent volume. Local agents can then use `coolify resource list`.
+Pass `--token "$COOLIFY_TOKEN"` to override a saved token after rotating it.
 
 ### Untrusted PR review
 

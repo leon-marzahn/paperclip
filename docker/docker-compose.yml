@@ -38,6 +38,8 @@ services:
       PAPERCLIP_DEPLOYMENT_EXPOSURE: "private"
       PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-http://localhost:3100}"
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}"
+      # Optional Coolify CLI token; use coolify --token "$COOLIFY_TOKEN" ...
+      COOLIFY_TOKEN: "${COOLIFY_TOKEN:-}"
     cap_add:
       - SYS_ADMIN
       - SYS_CHROOT

@@ -164,6 +164,24 @@ RUN echo "cli-tools-epoch: ${CLI_TOOLS_CACHE_EPOCH}" \
   && mkdir -p /paperclip \
   && chown node:node /paperclip
 
+# Install the standalone Coolify CLI for both published image architectures.
+ARG COOLIFY_CLI_VERSION=1.8.0
+ARG COOLIFY_CLI_SHA256_AMD64=e8fc6bef96e35c701509d6b45ef2a81387c9741ea11c18557092d0d9fb3a3d94
+ARG COOLIFY_CLI_SHA256_ARM64=e63087293ba105e39e9d38a66869a8950fca6a71af8f347f6a9e8a3657ea24ef
+RUN set -eu; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) sha256="$COOLIFY_CLI_SHA256_AMD64" ;; \
+      arm64) sha256="$COOLIFY_CLI_SHA256_ARM64" ;; \
+      *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSLo /tmp/coolify-cli.tar.gz "https://github.com/coollabsio/coolify-cli/releases/download/v${COOLIFY_CLI_VERSION}/coolify-cli_${COOLIFY_CLI_VERSION}_linux_${arch}.tar.gz"; \
+    echo "${sha256}  /tmp/coolify-cli.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/coolify-cli.tar.gz -C /usr/local/bin coolify; \
+    chmod 0755 /usr/local/bin/coolify; \
+    rm /tmp/coolify-cli.tar.gz; \
+    coolify --help > /dev/null
+
 COPY scripts/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
