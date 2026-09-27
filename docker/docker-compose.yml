@@ -66,6 +66,8 @@ services:
       - --no-sandbox
       - --port
       - "8931"
+      - --allowed-hosts
+      - "*"
       - --host
       - 0.0.0.0
     ports:
