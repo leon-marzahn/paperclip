@@ -54,26 +54,6 @@ services:
       db:
         condition: service_healthy
 
-  playwright-mcp:
-    image: mcr.microsoft.com/playwright/mcp
-    init: true
-    entrypoint: ["node"]
-    command:
-      - /app/cli.js
-      - --headless
-      - --browser
-      - chromium
-      - --no-sandbox
-      - --port
-      - "8931"
-      - --allowed-hosts
-      - "*"
-      - --host
-      - 0.0.0.0
-    ports:
-      - "8931:8931"
-    restart: unless-stopped
-
 volumes:
   pgdata:
   paperclip-data:
