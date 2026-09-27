@@ -125,29 +125,31 @@ PostgreSQL data persists in a named Docker volume (`pgdata`). Paperclip data per
 
 ### Coolify CLI
 
-The full-stack Compose file passes the optional `COOLIFY_TOKEN` environment
-variable to the server. Set it in your shell or an uncommitted Compose `.env`
-file before creating the container. The token is only supplied at runtime.
+Set both optional variables in your shell or an uncommitted Compose `.env`
+file before creating the container:
 
-The [Coolify CLI](https://coolify.io/docs/cli/authentication) uses saved contexts
-or an explicit `--token` flag; it does not read `COOLIFY_TOKEN` automatically.
-For Coolify Cloud, run:
+```dotenv
+COOLIFY_URL=https://coolify.example.com
+COOLIFY_TOKEN=your-api-token
+```
+
+Use your instance's base URL (without `/api/v1`), or `https://app.coolify.io`
+for Coolify Cloud. The entrypoint creates or updates the default `paperclip`
+[Coolify context](https://coolify.io/docs/cli/contexts) as the runtime user on
+each startup. Both variables must be set together; leaving both unset skips
+configuration. Credentials are supplied only at runtime and saved in
+`/paperclip/.config/coolify/config.json` in the persistent volume.
+
+Local agents can then use `coolify` directly:
 
 ```sh
 docker compose -f docker/docker-compose.yml exec --user node server \
-  sh -c 'coolify --token "$COOLIFY_TOKEN" resource list'
+  coolify resource list
 ```
 
-For self-hosted Coolify, add a context once with your instance URL:
-
-```sh
-docker compose -f docker/docker-compose.yml exec --user node server \
-  sh -c 'coolify context add paperclip https://coolify.example.com "$COOLIFY_TOKEN" --default'
-```
-
-This saves the URL and token under `/paperclip/.config/coolify/config.json` in
-the persistent volume. Local agents can then use `coolify resource list`.
-Pass `--token "$COOLIFY_TOKEN"` to override a saved token after rotating it.
+Recreate the server container after changing the URL or token so Compose
+passes the new values. Other saved contexts are preserved. Unsetting both
+variables leaves the previously saved context intact.
 
 ### Untrusted PR review
 

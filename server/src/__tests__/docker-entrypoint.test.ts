@@ -73,6 +73,27 @@ afterEach(() => {
 });
 
 describe("docker-entrypoint.sh", () => {
+  it.each([0, 1000])("configures Coolify as the runtime user when starting with UID %s", async (uid) => {
+    installStubs({ uid, gid: uid });
+    writeStub("coolify", `echo "coolify $*" >> "${logFile}"`);
+
+    const { stdout, calls } = await runEntrypoint({
+      COOLIFY_URL: "https://coolify.example.com/",
+      COOLIFY_TOKEN: "test-token",
+    });
+
+    expect(calls).toContain("coolify context add paperclip https://coolify.example.com test-token --default --force");
+    expect(calls).toContain("coolify context update paperclip --url https://coolify.example.com");
+    expect(calls.includes("gosu node coolify")).toBe(uid === 0);
+    expect(stdout).toContain("ENTRYPOINT-CMD-RAN");
+    expect(stdout).not.toContain("test-token");
+  });
+
+  it.each(["COOLIFY_URL", "COOLIFY_TOKEN"])("rejects Coolify configuration with only %s", async (key) => {
+    installStubs({ uid: 1000, gid: 1000 });
+    await expect(runEntrypoint({ [key]: "test-value" })).rejects.toThrow("set both COOLIFY_URL and COOLIFY_TOKEN");
+  });
+
   it("keeps the root-start gosu flow with default UID/GID (Docker Compose)", async () => {
     installStubs({ uid: 0, gid: 0 });
 
