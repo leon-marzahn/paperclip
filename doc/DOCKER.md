@@ -129,9 +129,16 @@ Set both optional variables in your shell or an uncommitted Compose `.env`
 file before creating the container:
 
 ```dotenv
-COOLIFY_URL=https://coolify.example.com
-COOLIFY_TOKEN=your-api-token
+PAPERCLIP_COOLIFY_URL=https://coolify.example.com
+PAPERCLIP_COOLIFY_TOKEN=your-api-token
 ```
+
+Use `PAPERCLIP_COOLIFY_URL`, not `COOLIFY_URL`: Coolify
+[predefines `COOLIFY_URL`](https://coolify.io/docs/applications/configuration/environment-variables)
+as the deployed application's URL. If you previously configured `COOLIFY_URL`
+for this integration, move that value to `PAPERCLIP_COOLIFY_URL` and move
+`COOLIFY_TOKEN` to `PAPERCLIP_COOLIFY_TOKEN`. Redeploy with the updated image;
+startup will correct the saved context's URL and token.
 
 Use your instance's base URL (without `/api/v1`), or `https://app.coolify.io`
 for Coolify Cloud. The entrypoint creates or updates the default `paperclip`

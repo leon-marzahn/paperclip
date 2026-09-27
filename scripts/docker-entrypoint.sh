@@ -6,18 +6,20 @@ PUID=${USER_UID:-1000}
 PGID=${USER_GID:-1000}
 
 # Configure the CLI as the runtime user so its saved context is accessible to
-# local agents. Explicitly update the URL: context add --force only replaces
+# local agents. COOLIFY_URL belongs to Coolify's application metadata; only
+# PAPERCLIP_COOLIFY_URL identifies the instance used by this integration.
+# Explicitly update the URL: context add --force only replaces
 # the token on an existing context in Coolify CLI 1.8.0.
 configure_coolify() {
-    if [ -z "${COOLIFY_URL:-}" ] && [ -z "${COOLIFY_TOKEN:-}" ]; then
+    if [ -z "${PAPERCLIP_COOLIFY_URL:-}" ] && [ -z "${PAPERCLIP_COOLIFY_TOKEN:-}" ]; then
         return
     fi
-    if [ -z "${COOLIFY_URL:-}" ] || [ -z "${COOLIFY_TOKEN:-}" ]; then
-        echo "docker-entrypoint.sh: set both COOLIFY_URL and COOLIFY_TOKEN to configure Coolify" >&2
+    if [ -z "${PAPERCLIP_COOLIFY_URL:-}" ] || [ -z "${PAPERCLIP_COOLIFY_TOKEN:-}" ]; then
+        echo "docker-entrypoint.sh: set both PAPERCLIP_COOLIFY_URL and PAPERCLIP_COOLIFY_TOKEN to configure Coolify" >&2
         exit 1
     fi
-    "$@" coolify context add paperclip "${COOLIFY_URL%/}" "$COOLIFY_TOKEN" --default --force
-    "$@" coolify context update paperclip --url "${COOLIFY_URL%/}"
+    "$@" coolify context add paperclip "${PAPERCLIP_COOLIFY_URL%/}" "$PAPERCLIP_COOLIFY_TOKEN" --default --force
+    "$@" coolify context update paperclip --url "${PAPERCLIP_COOLIFY_URL%/}"
 }
 
 # Without root we can neither remap the node user (usermod/groupmod/chown)

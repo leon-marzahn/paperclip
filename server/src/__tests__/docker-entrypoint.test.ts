@@ -78,8 +78,9 @@ describe("docker-entrypoint.sh", () => {
     writeStub("coolify", `echo "coolify $*" >> "${logFile}"`);
 
     const { stdout, calls } = await runEntrypoint({
-      COOLIFY_URL: "https://coolify.example.com/",
-      COOLIFY_TOKEN: "test-token",
+      COOLIFY_URL: "https://paperclip.example.com",
+      PAPERCLIP_COOLIFY_URL: "https://coolify.example.com/",
+      PAPERCLIP_COOLIFY_TOKEN: "test-token",
     });
 
     expect(calls).toContain("coolify context add paperclip https://coolify.example.com test-token --default --force");
@@ -87,11 +88,19 @@ describe("docker-entrypoint.sh", () => {
     expect(calls.includes("gosu node coolify")).toBe(uid === 0);
     expect(stdout).toContain("ENTRYPOINT-CMD-RAN");
     expect(stdout).not.toContain("test-token");
+    expect(calls).not.toContain("https://paperclip.example.com");
   });
 
-  it.each(["COOLIFY_URL", "COOLIFY_TOKEN"])("rejects Coolify configuration with only %s", async (key) => {
+  it("ignores Coolify's predefined application URL when CLI configuration is unset", async () => {
     installStubs({ uid: 1000, gid: 1000 });
-    await expect(runEntrypoint({ [key]: "test-value" })).rejects.toThrow("set both COOLIFY_URL and COOLIFY_TOKEN");
+    const { stdout, calls } = await runEntrypoint({ COOLIFY_URL: "https://paperclip.example.com" });
+    expect(stdout).toContain("ENTRYPOINT-CMD-RAN");
+    expect(calls).toBe("");
+  });
+
+  it.each(["PAPERCLIP_COOLIFY_URL", "PAPERCLIP_COOLIFY_TOKEN"])("rejects Coolify configuration with only %s", async (key) => {
+    installStubs({ uid: 1000, gid: 1000 });
+    await expect(runEntrypoint({ [key]: "test-value" })).rejects.toThrow("set both PAPERCLIP_COOLIFY_URL and PAPERCLIP_COOLIFY_TOKEN");
   });
 
   it("keeps the root-start gosu flow with default UID/GID (Docker Compose)", async () => {
