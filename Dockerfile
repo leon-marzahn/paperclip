@@ -177,10 +177,14 @@ RUN set -eu; \
     esac; \
     curl -fsSLo /tmp/coolify-cli.tar.gz "https://github.com/coollabsio/coolify-cli/releases/download/v${COOLIFY_CLI_VERSION}/coolify-cli_${COOLIFY_CLI_VERSION}_linux_${arch}.tar.gz"; \
     echo "${sha256}  /tmp/coolify-cli.tar.gz" | sha256sum -c -; \
-    tar -xzf /tmp/coolify-cli.tar.gz -C /usr/local/bin coolify; \
-    chmod 0755 /usr/local/bin/coolify; \
+    mkdir -p /usr/local/lib/coolify; \
+    tar -xzf /tmp/coolify-cli.tar.gz -C /usr/local/lib/coolify coolify; \
+    chmod 0755 /usr/local/lib/coolify/coolify; \
     rm /tmp/coolify-cli.tar.gz; \
-    coolify --help > /dev/null
+    /usr/local/lib/coolify/coolify --help > /dev/null
+
+COPY scripts/docker-coolify.sh /usr/local/bin/coolify
+RUN chmod +x /usr/local/bin/coolify
 
 COPY scripts/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

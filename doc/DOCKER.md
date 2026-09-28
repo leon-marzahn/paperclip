@@ -147,6 +147,13 @@ each startup. Both variables must be set together; leaving both unset skips
 configuration. Credentials are supplied only at runtime and saved in
 `/paperclip/.config/coolify/config.json` in the persistent volume.
 
+The image's `coolify` launcher uses `${PAPERCLIP_HOME:-/paperclip}` as the
+Coolify process's home. Local agents and container login shells therefore use
+the same saved context even when their own `HOME` differs. This does not change
+the calling shell's home or require the token variables in that shell. The
+shared directory must be accessible to the calling user; the launcher does
+not grant additional filesystem permissions or expose it to remote sandboxes.
+
 Local agents can then use `coolify` directly:
 
 ```sh
